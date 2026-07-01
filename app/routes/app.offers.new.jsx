@@ -14,8 +14,7 @@ export const action = async ({ request }) => {
   const { session } = await authenticate.admin(request);
   const formData = await request.formData();
 
-  const intent = formData.get("intent"); // "draft" | "publish"
-
+  const intent = formData.get("intent");
   const title = formData.get("title");
   const internalName = formData.get("internalName");
   const startAt = formData.get("startAt") || null;
@@ -28,15 +27,18 @@ export const action = async ({ request }) => {
     ? parseFloat(formData.get("cartMax"))
     : null;
 
-  const appliesTo = formData.get("appliesTo"); // "ANY" | "SELECTED"
-
-  const giftDiscountType = formData.get("giftDiscountType"); // "PERCENTAGE" | "AMOUNT"
+  const appliesTo = formData.get("appliesTo");
+  const giftDiscountType = formData.get("giftDiscountType");
   const giftDiscountValue = parseFloat(formData.get("giftDiscountValue") || "0");
-
-  const receiveMode = formData.get("receiveMode"); // "ALL" | "CHOOSE_COUNT"
+  const receiveMode = formData.get("receiveMode");
   const receiveCount = formData.get("receiveCount")
     ? parseInt(formData.get("receiveCount"), 10)
     : null;
+
+  const conditionProductIds = JSON.parse(
+    formData.get("conditionProductIds") || "[]",
+  );
+  const giftProductIds = JSON.parse(formData.get("giftProductIds") || "[]");
 
   const config = {
     customerTitle: title,
@@ -44,19 +46,16 @@ export const action = async ({ request }) => {
       min: cartMin,
       max: cartMax,
       appliesTo,
-      productIds: [], // wired up in product picker step
+      productIds: conditionProductIds,
     },
     gift: {
       discountType: giftDiscountType,
       discountValue: giftDiscountValue,
       receiveMode,
       receiveCount,
-      productIds: [], // wired up in product picker step
+      productIds: giftProductIds,
     },
-    schedule: {
-      startAt,
-      endAt,
-    },
+    schedule: { startAt, endAt },
   };
 
   await prisma.offer.create({
@@ -93,6 +92,8 @@ export default function NewGiftOfferPage() {
 
   const [appliesTo, setAppliesTo] = useState("ANY");
   const [receiveMode, setReceiveMode] = useState("ALL");
+  const [conditionProducts, setConditionProducts] = useState([]);
+  const [giftProducts, setGiftProducts] = useState([]);
 
   return (
     <s-page heading="Create Gift offer" backAction="/app/offers">
@@ -103,6 +104,10 @@ export default function NewGiftOfferPage() {
           setAppliesTo={setAppliesTo}
           receiveMode={receiveMode}
           setReceiveMode={setReceiveMode}
+          conditionProducts={conditionProducts}
+          setConditionProducts={setConditionProducts}
+          giftProducts={giftProducts}
+          setGiftProducts={setGiftProducts}
         />
 
         <s-stack direction="inline" gap="base">

@@ -1,6 +1,16 @@
+import { useAppBridge } from "@shopify/app-bridge-react";
+
 // Shared form fields for both "Create Gift offer" and "Edit Gift offer".
-// Both routes render this inside their own <Form method="post"> and <s-page>,
-// and handle their own loader/action (create vs update).
+// Props:
+//   defaultValues        - pre-filled values (empty strings for create, DB values for edit)
+//   appliesTo            - controlled state from parent
+//   setAppliesTo         - setter from parent
+//   receiveMode          - controlled state from parent
+//   setReceiveMode       - setter from parent
+//   conditionProducts    - array of { id, title } selected for the cart condition
+//   setConditionProducts - setter from parent
+//   giftProducts         - array of { id, title } selected as gift products
+//   setGiftProducts      - setter from parent
 
 export default function GiftOfferFormFields({
   defaultValues,
@@ -8,9 +18,53 @@ export default function GiftOfferFormFields({
   setAppliesTo,
   receiveMode,
   setReceiveMode,
+  conditionProducts,
+  setConditionProducts,
+  giftProducts,
+  setGiftProducts,
 }) {
+  const shopify = useAppBridge();
+
+  const openConditionProductPicker = async () => {
+    const result = await shopify.resourcePicker({
+      type: "product",
+      multiple: true,
+      selectionIds: conditionProducts.map((p) => ({ id: p.id })),
+    });
+    if (result?.selection) {
+      setConditionProducts(
+        result.selection.map((p) => ({ id: p.id, title: p.title })),
+      );
+    }
+  };
+
+  const openGiftProductPicker = async () => {
+    const result = await shopify.resourcePicker({
+      type: "product",
+      multiple: true,
+      selectionIds: giftProducts.map((p) => ({ id: p.id })),
+    });
+    if (result?.selection) {
+      setGiftProducts(
+        result.selection.map((p) => ({ id: p.id, title: p.title })),
+      );
+    }
+  };
+
   return (
     <>
+      {/* Hidden inputs carry selected product IDs into the form submission */}
+      <input
+        type="hidden"
+        name="conditionProductIds"
+        value={JSON.stringify(conditionProducts.map((p) => p.id))}
+      />
+      <input
+        type="hidden"
+        name="giftProductIds"
+        value={JSON.stringify(giftProducts.map((p) => p.id))}
+      />
+
       <s-section heading="Offer information">
         <s-stack direction="block" gap="base">
           <s-text-field
@@ -88,9 +142,36 @@ export default function GiftOfferFormFields({
           </s-select>
 
           {appliesTo === "SELECTED" && (
-            <s-button type="button" disabled>
-              Select products (coming in next step)
-            </s-button>
+            <s-stack direction="block" gap="tight">
+              <s-button type="button" onClick={openConditionProductPicker}>
+                Select products ({conditionProducts.length} selected)
+              </s-button>
+              {conditionProducts.length > 0 && (
+                <s-stack direction="block" gap="tight">
+                  {conditionProducts.map((p) => (
+                    <s-stack
+                      key={p.id}
+                      direction="inline"
+                      gap="tight"
+                      alignment="space-between"
+                    >
+                      <s-text>{p.title}</s-text>
+                      <s-button
+                        type="button"
+                        variant="tertiary"
+                        onClick={() =>
+                          setConditionProducts(
+                            conditionProducts.filter((x) => x.id !== p.id),
+                          )
+                        }
+                      >
+                        Remove
+                      </s-button>
+                    </s-stack>
+                  ))}
+                </s-stack>
+              )}
+            </s-stack>
           )}
         </s-stack>
       </s-section>
@@ -136,9 +217,36 @@ export default function GiftOfferFormFields({
             ></s-number-field>
           )}
 
-          <s-button type="button" disabled>
-            Select gifts (coming in next step) — 0 product(s) selected
-          </s-button>
+          <s-stack direction="block" gap="tight">
+            <s-button type="button" onClick={openGiftProductPicker}>
+              Select gifts ({giftProducts.length} product(s) selected)
+            </s-button>
+            {giftProducts.length > 0 && (
+              <s-stack direction="block" gap="tight">
+                {giftProducts.map((p) => (
+                  <s-stack
+                    key={p.id}
+                    direction="inline"
+                    gap="tight"
+                    alignment="space-between"
+                  >
+                    <s-text>{p.title}</s-text>
+                    <s-button
+                      type="button"
+                      variant="tertiary"
+                      onClick={() =>
+                        setGiftProducts(
+                          giftProducts.filter((x) => x.id !== p.id),
+                        )
+                      }
+                    >
+                      Remove
+                    </s-button>
+                  </s-stack>
+                ))}
+              </s-stack>
+            )}
+          </s-stack>
         </s-stack>
       </s-section>
     </>

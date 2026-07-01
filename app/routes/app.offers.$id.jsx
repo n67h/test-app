@@ -12,7 +12,7 @@ import prisma from "../db.server";
 import GiftOfferFormFields from "../components/GiftOfferFormFields";
 
 export const loader = async ({ request, params }) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
 
   const offer = await prisma.offer.findFirst({
     where: { id: params.id, shop: session.shop },
@@ -22,7 +22,35 @@ export const loader = async ({ request, params }) => {
     throw new Response("Offer not found", { status: 404 });
   }
 
-  return { offer };
+  // Fetch real product titles for any saved product IDs
+  const config = JSON.parse(offer.config || "{}");
+  const allProductIds = [
+    ...(config.cartCondition?.productIds || []),
+    ...(config.gift?.productIds || []),
+  ];
+
+  let productTitles = {};
+
+  if (allProductIds.length > 0) {
+    const response = await admin.graphql(
+      `#graphql
+      query getProductTitles($ids: [ID!]!) {
+        nodes(ids: $ids) {
+          ... on Product {
+            id
+            title
+          }
+        }
+      }`,
+      { variables: { ids: allProductIds } },
+    );
+    const data = await response.json();
+    data.data.nodes.forEach((node) => {
+      if (node?.id) productTitles[node.id] = node.title;
+    });
+  }
+
+  return { offer, productTitles };
 };
 
 export const action = async ({ request, params }) => {
@@ -30,13 +58,10 @@ export const action = async ({ request, params }) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
 
-  // Confirm the offer belongs to this shop before mutating it.
   const existing = await prisma.offer.findFirst({
     where: { id: params.id, shop: session.shop },
   });
-  if (!existing) {
-    throw new Response("Offer not found", { status: 404 });
-  }
+  if (!existing) throw new Response("Offer not found", { status: 404 });
 
   if (intent === "delete") {
     await prisma.offer.delete({ where: { id: params.id } });
@@ -51,7 +76,7 @@ export const action = async ({ request, params }) => {
     return redirect(`/app/offers/${params.id}`);
   }
 
-  // Otherwise, this is a full form save (draft or publish).
+  // Full form save
   const title = formData.get("title");
   const internalName = formData.get("internalName");
   const startAt = formData.get("startAt") || null;
@@ -65,17 +90,17 @@ export const action = async ({ request, params }) => {
     : null;
 
   const appliesTo = formData.get("appliesTo");
-
   const giftDiscountType = formData.get("giftDiscountType");
   const giftDiscountValue = parseFloat(formData.get("giftDiscountValue") || "0");
-
   const receiveMode = formData.get("receiveMode");
   const receiveCount = formData.get("receiveCount")
     ? parseInt(formData.get("receiveCount"), 10)
     : null;
 
-  // Preserve productIds already saved (picker comes in a later step).
-  const existingConfig = JSON.parse(existing.config || "{}");
+  const conditionProductIds = JSON.parse(
+    formData.get("conditionProductIds") || "[]",
+  );
+  const giftProductIds = JSON.parse(formData.get("giftProductIds") || "[]");
 
   const config = {
     customerTitle: title,
@@ -83,19 +108,16 @@ export const action = async ({ request, params }) => {
       min: cartMin,
       max: cartMax,
       appliesTo,
-      productIds: existingConfig.cartCondition?.productIds || [],
+      productIds: conditionProductIds,
     },
     gift: {
       discountType: giftDiscountType,
       discountValue: giftDiscountValue,
       receiveMode,
       receiveCount,
-      productIds: existingConfig.gift?.productIds || [],
+      productIds: giftProductIds,
     },
-    schedule: {
-      startAt,
-      endAt,
-    },
+    schedule: { startAt, endAt },
   };
 
   await prisma.offer.update({
@@ -113,7 +135,7 @@ export const action = async ({ request, params }) => {
 };
 
 export default function EditGiftOfferPage() {
-  const { offer } = useLoaderData();
+  const { offer, productTitles } = useLoaderData();
   const navigate = useNavigate();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
@@ -126,6 +148,18 @@ export default function EditGiftOfferPage() {
   const [receiveMode, setReceiveMode] = useState(
     config.gift?.receiveMode || "ALL",
   );
+
+  const savedConditionProducts = (config.cartCondition?.productIds || []).map(
+    (id) => ({ id, title: productTitles[id] || id.split("/").pop() }),
+  );
+  const savedGiftProducts = (config.gift?.productIds || []).map((id) => ({
+    id,
+    title: productTitles[id] || id.split("/").pop(),
+  }));
+
+  const [conditionProducts, setConditionProducts] =
+    useState(savedConditionProducts);
+  const [giftProducts, setGiftProducts] = useState(savedGiftProducts);
 
   const defaultValues = {
     internalName: offer.title || "",
@@ -158,6 +192,10 @@ export default function EditGiftOfferPage() {
           setAppliesTo={setAppliesTo}
           receiveMode={receiveMode}
           setReceiveMode={setReceiveMode}
+          conditionProducts={conditionProducts}
+          setConditionProducts={setConditionProducts}
+          giftProducts={giftProducts}
+          setGiftProducts={setGiftProducts}
         />
 
         <s-stack direction="inline" gap="base">
