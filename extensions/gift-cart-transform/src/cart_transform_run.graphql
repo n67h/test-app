@@ -3,6 +3,28 @@ query CartTransformRunInput {
     lines {
       id
       quantity
+      attribute(key: "_is_gift") {
+        value
+      }
+      cost {
+        subtotalAmount {
+          amount
+          currencyCode
+        }
+      }
+      merchandise {
+        ... on ProductVariant {
+          id
+          product {
+            id
+          }
+        }
+      }
+    }
+  }
+  shop {
+    metafield(namespace: "$app", key: "active_offers") {
+      value
     }
   }
 }

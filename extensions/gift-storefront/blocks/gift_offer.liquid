@@ -1,0 +1,28 @@
+{% comment %}
+  Gift Offer Block
+  Add this block to your theme layout (theme.liquid) so it loads on every page.
+  It reads the active offers metafield and passes them to the JS asset.
+{% endcomment %}
+
+{% assign offers_metafield = shop.metafields['$app']['active_offers'] %}
+
+{% if offers_metafield %}
+  <script>
+    window.__giftOffers = {{ offers_metafield.value | json }};
+  </script>
+{% else %}
+  <script>
+    window.__giftOffers = [];
+  </script>
+{% endif %}
+
+{{ 'gift-offer.js' | asset_url | script_tag }}
+
+{% schema %}
+{
+  "name": "Gift Offer",
+  "target": "head",
+  "javascript": "gift-offer.js",
+  "settings": []
+}
+{% endschema %}

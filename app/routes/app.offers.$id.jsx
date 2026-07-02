@@ -1,3 +1,4 @@
+import { syncOffersMetafield } from "../lib/syncOffersMetafield";
 import { useState } from "react";
 import {
   useLoaderData,
@@ -54,7 +55,7 @@ export const loader = async ({ request, params }) => {
 };
 
 export const action = async ({ request, params }) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
 
@@ -65,6 +66,7 @@ export const action = async ({ request, params }) => {
 
   if (intent === "delete") {
     await prisma.offer.delete({ where: { id: params.id } });
+    await syncOffersMetafield(session.shop, admin);
     return redirect("/app/offers");
   }
 
@@ -73,6 +75,7 @@ export const action = async ({ request, params }) => {
       where: { id: params.id },
       data: { status: intent === "activate" ? "ACTIVE" : "PAUSED" },
     });
+    await syncOffersMetafield(session.shop, admin);
     return redirect(`/app/offers/${params.id}`);
   }
 
@@ -131,6 +134,7 @@ export const action = async ({ request, params }) => {
     },
   });
 
+  await syncOffersMetafield(session.shop, admin);
   return redirect("/app/offers");
 };
 

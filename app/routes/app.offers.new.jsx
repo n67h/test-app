@@ -1,3 +1,4 @@
+import { syncOffersMetafield } from "../lib/syncOffersMetafield";
 import { useState } from "react";
 import { useNavigate, useNavigation, Form, redirect } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -11,7 +12,7 @@ export const loader = async ({ request }) => {
 };
 
 export const action = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const formData = await request.formData();
 
   const intent = formData.get("intent");
@@ -70,6 +71,9 @@ export const action = async ({ request }) => {
     },
   });
 
+  if (intent === "publish") {
+    await syncOffersMetafield(session.shop, admin);
+  }
   return redirect("/app/offers");
 };
 

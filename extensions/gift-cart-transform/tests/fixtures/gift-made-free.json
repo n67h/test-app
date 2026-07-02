@@ -7,11 +7,11 @@
         "lines": [
           {
             "id": "gid://shopify/CartLine/1",
-            "quantity": 1,
+            "quantity": 2,
             "attribute": null,
             "cost": {
               "subtotalAmount": {
-                "amount": "50.00",
+                "amount": "600.00",
                 "currencyCode": "USD"
               }
             },
@@ -19,6 +19,25 @@
               "id": "gid://shopify/ProductVariant/1",
               "product": {
                 "id": "gid://shopify/Product/1"
+              }
+            }
+          },
+          {
+            "id": "gid://shopify/CartLine/2",
+            "quantity": 1,
+            "attribute": {
+              "value": "true"
+            },
+            "cost": {
+              "subtotalAmount": {
+                "amount": "25.00",
+                "currencyCode": "USD"
+              }
+            },
+            "merchandise": {
+              "id": "gid://shopify/ProductVariant/99",
+              "product": {
+                "id": "gid://shopify/Product/99"
               }
             }
           }
@@ -31,7 +50,20 @@
       }
     },
     "output": {
-      "operations": []
+      "operations": [
+        {
+          "lineUpdate": {
+            "cartLineId": "gid://shopify/CartLine/2",
+            "price": {
+              "adjustment": {
+                "fixedPricePerUnit": {
+                  "amount": "0.00"
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }
