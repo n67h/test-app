@@ -1,17 +1,5 @@
 import { useAppBridge } from "@shopify/app-bridge-react";
 
-// Shared form fields for both "Create Gift offer" and "Edit Gift offer".
-// Props:
-//   defaultValues        - pre-filled values (empty strings for create, DB values for edit)
-//   appliesTo            - controlled state from parent
-//   setAppliesTo         - setter from parent
-//   receiveMode          - controlled state from parent
-//   setReceiveMode       - setter from parent
-//   conditionProducts    - array of { id, title } selected for the cart condition
-//   setConditionProducts - setter from parent
-//   giftProducts         - array of { id, title } selected as gift products
-//   setGiftProducts      - setter from parent
-
 export default function GiftOfferFormFields({
   defaultValues,
   appliesTo,
@@ -33,7 +21,11 @@ export default function GiftOfferFormFields({
     });
     if (result?.selection) {
       setConditionProducts(
-        result.selection.map((p) => ({ id: p.id, title: p.title })),
+        result.selection.map((p) => ({
+          id: p.id,
+          title: p.title,
+          variantId: p.variants?.[0]?.id ?? null,
+        })),
       );
     }
   };
@@ -46,14 +38,17 @@ export default function GiftOfferFormFields({
     });
     if (result?.selection) {
       setGiftProducts(
-        result.selection.map((p) => ({ id: p.id, title: p.title })),
+        result.selection.map((p) => ({
+          id: p.id,
+          title: p.title,
+          variantId: p.variants?.[0]?.id ?? null,
+        })),
       );
     }
   };
 
   return (
     <>
-      {/* Hidden inputs carry selected product IDs into the form submission */}
       <input
         type="hidden"
         name="conditionProductIds"
@@ -61,8 +56,18 @@ export default function GiftOfferFormFields({
       />
       <input
         type="hidden"
+        name="conditionProductVariantIds"
+        value={JSON.stringify(conditionProducts.map((p) => p.variantId))}
+      />
+      <input
+        type="hidden"
         name="giftProductIds"
         value={JSON.stringify(giftProducts.map((p) => p.id))}
+      />
+      <input
+        type="hidden"
+        name="giftProductVariantIds"
+        value={JSON.stringify(giftProducts.map((p) => p.variantId))}
       />
 
       <s-section heading="Offer information">

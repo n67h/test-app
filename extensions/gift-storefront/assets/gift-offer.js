@@ -1,6 +1,6 @@
 (function () {
   const GIFT_ATTR = "_is_gift";
-  const CHECK_INTERVAL = 8000; // 8 seconds between checks
+  const CHECK_INTERVAL = 8000;
   let isSyncing = false;
   let syncTimer = null;
 
@@ -36,19 +36,6 @@
     return res.json();
   }
 
-  async function getVariantId(productGid) {
-    // Use /products/NUMERIC_ID.js — most reliable Ajax API endpoint
-    const numericId = productGid.split("/").pop();
-    try {
-      const res = await fetch(`/products/${numericId}.js`);
-      if (!res.ok) return null;
-      const product = await res.json();
-      return product?.variants?.[0]?.id ?? null;
-    } catch {
-      return null;
-    }
-  }
-
   async function syncGifts() {
     if (isSyncing) return;
     isSyncing = true;
@@ -60,7 +47,6 @@
       const cart = await getCart();
       const subtotal = cart.total_price / 100;
 
-      // Build map of existing gift lines by product GID
       const giftLinesByProductGid = {};
       cart.items.forEach((item) => {
         if (item.properties?.[GIFT_ATTR] === "true") {
@@ -74,22 +60,24 @@
         const min = offer.cartCondition?.min ?? 0;
         const max = offer.cartCondition?.max ?? null;
         const giftProductIds = offer.gift?.productIds ?? [];
+        const giftVariantIds = offer.gift?.variantIds ?? [];
 
-        // Check schedule
         const now = Date.now();
         if (offer.schedule?.startAt && now < new Date(offer.schedule.startAt).getTime()) continue;
         if (offer.schedule?.endAt && now > new Date(offer.schedule.endAt).getTime()) continue;
 
         const qualifies = subtotal >= min && (max === null || subtotal <= max);
 
-        for (const giftProductGid of giftProductIds) {
+        for (let i = 0; i < giftProductIds.length; i++) {
+          const giftProductGid = giftProductIds[i];
+          const variantId = giftVariantIds[i] ?? null;
           const existingLine = giftLinesByProductGid[giftProductGid];
 
           if (qualifies && !existingLine) {
-            const variantId = await getVariantId(giftProductGid);
             if (variantId) {
-              await addToCart(variantId);
-              // Prevent re-adding in same cycle
+              // Extract numeric ID from GID (e.g. "gid://shopify/ProductVariant/123" → 123)
+              const numericVariantId = String(variantId).split("/").pop();
+              await addToCart(numericVariantId);
               giftLinesByProductGid[giftProductGid] = { key: "pending" };
             }
           } else if (!qualifies && existingLine && existingLine.key !== "pending") {
@@ -105,19 +93,13 @@
     }
   }
 
-  // Debounced sync — prevents rapid-fire calls
   function scheduleSyncGifts() {
     if (syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(syncGifts, 1000);
   }
 
-  // Run once on page load after a short delay
   setTimeout(syncGifts, 2000);
-
-  // Poll every 8 seconds
   setInterval(syncGifts, CHECK_INTERVAL);
-
-  // Hook into theme events but debounced
   document.addEventListener("cart:updated", scheduleSyncGifts);
   document.addEventListener("cart:refresh", scheduleSyncGifts);
 })();

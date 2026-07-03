@@ -1,0 +1,47 @@
+{
+  "cart": {
+    "lines": [
+      {
+        "id": "gid://shopify/CartLine/1",
+        "quantity": 2,
+        "attribute": null,
+        "cost": {
+          "subtotalAmount": {
+            "amount": "1399.90",
+            "currencyCode": "USD"
+          }
+        },
+        "merchandise": {
+          "id": "gid://shopify/ProductVariant/1",
+          "product": {
+            "id": "gid://shopify/Product/1"
+          }
+        }
+      },
+      {
+        "id": "gid://shopify/CartLine/2",
+        "quantity": 1,
+        "attribute": {
+          "value": "true"
+        },
+        "cost": {
+          "subtotalAmount": {
+            "amount": "0.00",
+            "currencyCode": "USD"
+          }
+        },
+        "merchandise": {
+          "id": "gid://shopify/ProductVariant/44084033716260",
+          "product": {
+            "id": "gid://shopify/Product/8268124913700"
+          }
+        }
+      }
+    ]
+  },
+  "shop": {
+    "metafield": {
+      "value": "[{\"id\":\"cmr1ulh7z0001t47481du0g14\",\"type\":\"GIFT\",\"triggerType\":\"CART_VALUE\",\"triggerValue\":1220,\"cartCondition\":{\"min\":1220,\"max\":null,\"appliesTo\":\"ANY\",\"productIds\":[],\"variantIds\":[]},\"gift\":{\"discountType\":\"PERCENTAGE\",\"discountValue\":100,\"receiveMode\":\"ALL\",\"receiveCount\":null,\"productIds\":[\"gid://shopify/Product/8268124913700\"],\"variantIds\":[\"gid://shopify/ProductVariant/44084033716260\"]},\"schedule\":{\"startAt\":null,\"endAt\":null}}]"
+    }
+  }
+}

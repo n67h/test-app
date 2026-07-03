@@ -39,7 +39,13 @@ export const action = async ({ request }) => {
   const conditionProductIds = JSON.parse(
     formData.get("conditionProductIds") || "[]",
   );
+  const conditionProductVariantIds = JSON.parse(
+    formData.get("conditionProductVariantIds") || "[]",
+  );
   const giftProductIds = JSON.parse(formData.get("giftProductIds") || "[]");
+  const giftProductVariantIds = JSON.parse(
+    formData.get("giftProductVariantIds") || "[]",
+  );
 
   const config = {
     customerTitle: title,
@@ -48,6 +54,7 @@ export const action = async ({ request }) => {
       max: cartMax,
       appliesTo,
       productIds: conditionProductIds,
+      variantIds: conditionProductVariantIds,
     },
     gift: {
       discountType: giftDiscountType,
@@ -55,6 +62,7 @@ export const action = async ({ request }) => {
       receiveMode,
       receiveCount,
       productIds: giftProductIds,
+      variantIds: giftProductVariantIds,
     },
     schedule: { startAt, endAt },
   };

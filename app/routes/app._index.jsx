@@ -1,326 +1,162 @@
-import { useEffect } from "react";
-import { useFetcher } from "react-router";
-import { useAppBridge } from "@shopify/app-bridge-react";
+import { useLoaderData, useNavigate } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
+import prisma from "../db.server";
 
 export const loader = async ({ request }) => {
-  await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
 
-  return null;
-};
-
-export const action = async ({ request }) => {
-  const { admin } = await authenticate.admin(request);
-  const color = ["Red", "Orange", "Yellow", "Green"][
-    Math.floor(Math.random() * 4)
-  ];
-  const response = await admin.graphql(
-    `#graphql
-      mutation populateProduct($product: ProductCreateInput!) {
-        productCreate(product: $product) {
-          product {
-            id
-            title
-            handle
-            status
-            variants(first: 10) {
-              edges {
-                node {
-                  id
-                  price
-                  barcode
-                  createdAt
-                }
-              }
-            }
-            demoInfo: metafield(namespace: "$app", key: "demo_info") {
-              jsonValue
-            }
-          }
-        }
-      }`,
-    {
-      variables: {
-        product: {
-          title: `${color} Snowboard`,
-          metafields: [
-            {
-              namespace: "$app",
-              key: "demo_info",
-              value: "Created by React Router Template",
-            },
-          ],
-        },
-      },
-    },
-  );
-  const responseJson = await response.json();
-  const product = responseJson.data.productCreate.product;
-  const variantId = product.variants.edges[0].node.id;
-  const variantResponse = await admin.graphql(
-    `#graphql
-    mutation shopifyReactRouterTemplateUpdateVariant($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-      productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-        productVariants {
-          id
-          price
-          barcode
-          createdAt
-        }
-      }
-    }`,
-    {
-      variables: {
-        productId: product.id,
-        variants: [{ id: variantId, price: "100.00" }],
-      },
-    },
-  );
-  const variantResponseJson = await variantResponse.json();
-  const metaobjectResponse = await admin.graphql(
-    `#graphql
-    mutation shopifyReactRouterTemplateUpsertMetaobject($handle: MetaobjectHandleInput!, $metaobject: MetaobjectUpsertInput!) {
-      metaobjectUpsert(handle: $handle, metaobject: $metaobject) {
-        metaobject {
-          id
-          handle
-          title: field(key: "title") {
-            jsonValue
-          }
-          description: field(key: "description") {
-            jsonValue
-          }
-        }
-        userErrors {
-          field
-          message
-        }
-      }
-    }`,
-    {
-      variables: {
-        handle: {
-          type: "$app:example",
-          handle: "demo-entry",
-        },
-        metaobject: {
-          fields: [
-            { key: "title", value: "Demo Entry" },
-            {
-              key: "description",
-              value:
-                "This metaobject was created by the Shopify app template to demonstrate the metaobject API.",
-            },
-          ],
-        },
-      },
-    },
-  );
-  const metaobjectResponseJson = await metaobjectResponse.json();
+  const [totalOffers, activeOffers, draftOffers, pausedOffers, recentOffers] =
+    await Promise.all([
+      prisma.offer.count({ where: { shop: session.shop } }),
+      prisma.offer.count({ where: { shop: session.shop, status: "ACTIVE" } }),
+      prisma.offer.count({ where: { shop: session.shop, status: "DRAFT" } }),
+      prisma.offer.count({ where: { shop: session.shop, status: "PAUSED" } }),
+      prisma.offer.findMany({
+        where: { shop: session.shop },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      }),
+    ]);
 
   return {
-    product: responseJson.data.productCreate.product,
-    variant: variantResponseJson.data.productVariantsBulkUpdate.productVariants,
-    metaobject: metaobjectResponseJson.data.metaobjectUpsert.metaobject,
+    totalOffers,
+    activeOffers,
+    draftOffers,
+    pausedOffers,
+    recentOffers,
   };
 };
 
-export default function Index() {
-  const fetcher = useFetcher();
-  const shopify = useAppBridge();
-  const isLoading =
-    ["loading", "submitting"].includes(fetcher.state) &&
-    fetcher.formMethod === "POST";
-
-  useEffect(() => {
-    if (fetcher.data?.product?.id) {
-      shopify.toast.show("Product created");
-    }
-  }, [fetcher.data?.product?.id, shopify]);
-  const generateProduct = () => fetcher.submit({}, { method: "POST" });
+export default function DashboardPage() {
+  const { totalOffers, activeOffers, draftOffers, pausedOffers, recentOffers } =
+    useLoaderData();
+  const navigate = useNavigate();
 
   return (
-    <s-page heading="Shopify app template">
-      <s-button slot="primary-action" onClick={generateProduct}>
-        Generate a product
+    <s-page heading="Dashboard">
+      <s-button
+        slot="primary-action"
+        variant="primary"
+        command="--show"
+        commandFor="choose-offer-type-modal"
+        onClick={() => navigate("/app/offers")}
+      >
+        Manage offers
       </s-button>
 
-      <s-section heading="Congrats on creating a new Shopify app 🎉">
-        <s-paragraph>
-          This embedded app template uses{" "}
-          <s-link
-            href="https://shopify.dev/docs/apps/tools/app-bridge"
-            target="_blank"
-          >
-            App Bridge
-          </s-link>{" "}
-          interface examples like an{" "}
-          <s-link href="/app/additional">additional page in the app nav</s-link>
-          , as well as an{" "}
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql"
-            target="_blank"
-          >
-            Admin GraphQL
-          </s-link>{" "}
-          mutation demo, to provide a starting point for app development.
-        </s-paragraph>
-      </s-section>
-      <s-section heading="Get started with products">
-        <s-paragraph>
-          Generate a product with GraphQL and get the JSON output for that
-          product. Learn more about the{" "}
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql/latest/mutations/productCreate"
-            target="_blank"
-          >
-            productCreate
-          </s-link>{" "}
-          mutation in our API references. Includes a product{" "}
-          <s-link
-            href="https://shopify.dev/docs/apps/build/custom-data/metafields"
-            target="_blank"
-          >
-            metafield
-          </s-link>{" "}
-          and{" "}
-          <s-link
-            href="https://shopify.dev/docs/apps/build/custom-data/metaobjects"
-            target="_blank"
-          >
-            metaobject
-          </s-link>
-          .
-        </s-paragraph>
-        <s-stack direction="inline" gap="base">
-          <s-button
-            onClick={generateProduct}
-            {...(isLoading ? { loading: true } : {})}
-          >
-            Generate a product
-          </s-button>
-          {fetcher.data?.product && (
-            <s-button
-              onClick={() => {
-                shopify.intents.invoke?.("edit:shopify/Product", {
-                  value: fetcher.data?.product?.id,
-                });
-              }}
-              target="_blank"
-              variant="tertiary"
-            >
-              Edit product
-            </s-button>
-          )}
-        </s-stack>
-        {fetcher.data?.product && (
-          <s-section heading="productCreate mutation">
-            <s-stack direction="block" gap="base">
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre style={{ margin: 0 }}>
-                  <code>{JSON.stringify(fetcher.data.product, null, 2)}</code>
-                </pre>
-              </s-box>
-
-              <s-heading>productVariantsBulkUpdate mutation</s-heading>
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre style={{ margin: 0 }}>
-                  <code>{JSON.stringify(fetcher.data.variant, null, 2)}</code>
-                </pre>
-              </s-box>
-
-              <s-heading>metaobjectUpsert mutation</s-heading>
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre style={{ margin: 0 }}>
-                  <code>
-                    {JSON.stringify(fetcher.data.metaobject, null, 2)}
-                  </code>
-                </pre>
-              </s-box>
+      {/* Stats row */}
+      <s-section>
+        <s-grid gridTemplateColumns="1fr 1fr 1fr 1fr" gap="base">
+          <s-box padding="base" borderWidth="base" borderRadius="base">
+            <s-stack direction="block" gap="tight">
+              <s-text>{totalOffers}</s-text>
+              <s-heading>Total offers</s-heading>
             </s-stack>
-          </s-section>
+          </s-box>
+
+          <s-box padding="base" borderWidth="base" borderRadius="base">
+            <s-stack direction="block" gap="tight">
+              <s-text>{activeOffers}</s-text>
+              <s-heading>Active</s-heading>
+            </s-stack>
+          </s-box>
+
+          <s-box padding="base" borderWidth="base" borderRadius="base">
+            <s-stack direction="block" gap="tight">
+              <s-text>{draftOffers}</s-text>
+              <s-heading>Draft</s-heading>
+            </s-stack>
+          </s-box>
+
+          <s-box padding="base" borderWidth="base" borderRadius="base">
+            <s-stack direction="block" gap="tight">
+              <s-text>{pausedOffers}</s-text>
+              <s-heading>Paused</s-heading>
+            </s-stack>
+          </s-box>
+        </s-grid>
+      </s-section>
+
+      {/* Recent offers */}
+      <s-section heading="Recent offers">
+        {recentOffers.length === 0 ? (
+          <s-stack direction="block" gap="base">
+            <s-paragraph>
+              You haven't created any offers yet. Create your first gift offer
+              to start rewarding customers.
+            </s-paragraph>
+            <s-button
+              variant="primary"
+              onClick={() => navigate("/app/offers")}
+            >
+              Create your first offer
+            </s-button>
+          </s-stack>
+        ) : (
+          <s-table>
+            <s-table-header-row>
+              <s-table-header>Title</s-table-header>
+              <s-table-header>Type</s-table-header>
+              <s-table-header>Status</s-table-header>
+              <s-table-header>Created</s-table-header>
+            </s-table-header-row>
+            <s-table-body>
+              {recentOffers.map((offer) => (
+                <s-table-row
+                  key={offer.id}
+                  onClick={() => navigate(`/app/offers/${offer.id}`)}
+                >
+                  <s-table-cell>{offer.title}</s-table-cell>
+                  <s-table-cell>{offer.type}</s-table-cell>
+                  <s-table-cell>{offer.status}</s-table-cell>
+                  <s-table-cell>
+                    {new Date(offer.createdAt).toLocaleDateString()}
+                  </s-table-cell>
+                </s-table-row>
+              ))}
+            </s-table-body>
+          </s-table>
+        )}
+
+        {recentOffers.length > 0 && (
+          <s-button
+            variant="tertiary"
+            onClick={() => navigate("/app/offers")}
+          >
+            View all offers
+          </s-button>
         )}
       </s-section>
 
-      <s-section slot="aside" heading="App template specs">
-        <s-paragraph>
-          <s-text>Framework: </s-text>
-          <s-link href="https://reactrouter.com/" target="_blank">
-            React Router
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Interface: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/api/app-home/using-polaris-components"
-            target="_blank"
-          >
-            Polaris web components
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>API: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql"
-            target="_blank"
-          >
-            GraphQL
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Custom data: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/apps/build/custom-data"
-            target="_blank"
-          >
-            Metafields &amp; metaobjects
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Database: </s-text>
-          <s-link href="https://www.prisma.io/" target="_blank">
-            Prisma
-          </s-link>
-        </s-paragraph>
+      {/* Quick actions */}
+      <s-section slot="aside" heading="Quick actions">
+        <s-stack direction="block" gap="base">
+          <s-button onClick={() => navigate("/app/offers")}>
+            View all offers
+          </s-button>
+          <s-button onClick={() => navigate("/app/offers/new?type=gift&template=spend-x-get-gift")}>
+            Create gift offer
+          </s-button>
+        </s-stack>
       </s-section>
 
-      <s-section slot="aside" heading="Next steps">
-        <s-unordered-list>
-          <s-list-item>
-            Build an{" "}
-            <s-link
-              href="https://shopify.dev/docs/apps/getting-started/build-app-example"
-              target="_blank"
-            >
-              example app
-            </s-link>
-          </s-list-item>
-          <s-list-item>
-            Explore Shopify&apos;s API with{" "}
-            <s-link
-              href="https://shopify.dev/docs/apps/tools/graphiql-admin-api"
-              target="_blank"
-            >
-              GraphiQL
-            </s-link>
-          </s-list-item>
-        </s-unordered-list>
+      {/* Offer breakdown */}
+      <s-section slot="aside" heading="Offer breakdown">
+        <s-stack direction="block" gap="tight">
+          <s-stack direction="inline" gap="base" alignment="space-between">
+            <s-text>Active</s-text>
+            <s-badge tone="success">{activeOffers}</s-badge>
+          </s-stack>
+          <s-stack direction="inline" gap="base" alignment="space-between">
+            <s-text>Draft</s-text>
+            <s-badge tone="neutral">{draftOffers}</s-badge>
+          </s-stack>
+          <s-stack direction="inline" gap="base" alignment="space-between">
+            <s-text>Paused</s-text>
+            <s-badge tone="neutral">{pausedOffers}</s-badge>
+          </s-stack>
+        </s-stack>
       </s-section>
     </s-page>
   );

@@ -23,7 +23,6 @@ export const loader = async ({ request, params }) => {
     throw new Response("Offer not found", { status: 404 });
   }
 
-  // Fetch real product titles for any saved product IDs
   const config = JSON.parse(offer.config || "{}");
   const allProductIds = [
     ...(config.cartCondition?.productIds || []),
@@ -79,7 +78,6 @@ export const action = async ({ request, params }) => {
     return redirect(`/app/offers/${params.id}`);
   }
 
-  // Full form save
   const title = formData.get("title");
   const internalName = formData.get("internalName");
   const startAt = formData.get("startAt") || null;
@@ -103,7 +101,13 @@ export const action = async ({ request, params }) => {
   const conditionProductIds = JSON.parse(
     formData.get("conditionProductIds") || "[]",
   );
+  const conditionProductVariantIds = JSON.parse(
+    formData.get("conditionProductVariantIds") || "[]",
+  );
   const giftProductIds = JSON.parse(formData.get("giftProductIds") || "[]");
+  const giftProductVariantIds = JSON.parse(
+    formData.get("giftProductVariantIds") || "[]",
+  );
 
   const config = {
     customerTitle: title,
@@ -112,6 +116,7 @@ export const action = async ({ request, params }) => {
       max: cartMax,
       appliesTo,
       productIds: conditionProductIds,
+      variantIds: conditionProductVariantIds,
     },
     gift: {
       discountType: giftDiscountType,
@@ -119,6 +124,7 @@ export const action = async ({ request, params }) => {
       receiveMode,
       receiveCount,
       productIds: giftProductIds,
+      variantIds: giftProductVariantIds,
     },
     schedule: { startAt, endAt },
   };
@@ -154,11 +160,16 @@ export default function EditGiftOfferPage() {
   );
 
   const savedConditionProducts = (config.cartCondition?.productIds || []).map(
-    (id) => ({ id, title: productTitles[id] || id.split("/").pop() }),
+    (id, i) => ({
+      id,
+      title: productTitles[id] || id.split("/").pop(),
+      variantId: config.cartCondition?.variantIds?.[i] ?? null,
+    }),
   );
-  const savedGiftProducts = (config.gift?.productIds || []).map((id) => ({
+  const savedGiftProducts = (config.gift?.productIds || []).map((id, i) => ({
     id,
     title: productTitles[id] || id.split("/").pop(),
+    variantId: config.gift?.variantIds?.[i] ?? null,
   }));
 
   const [conditionProducts, setConditionProducts] =
