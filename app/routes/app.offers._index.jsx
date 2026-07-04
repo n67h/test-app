@@ -3,6 +3,7 @@ import { useLoaderData, useNavigate } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { computeEffectiveStatus, formatStatus, statusTone } from "../lib/offerStatus";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
@@ -12,7 +13,12 @@ export const loader = async ({ request }) => {
     orderBy: { createdAt: "desc" },
   });
 
-  return { offers };
+  const offersWithStatus = offers.map((offer) => ({
+    ...offer,
+    effectiveStatus: computeEffectiveStatus(offer),
+  }));
+
+  return { offers: offersWithStatus };
 };
 
 const GIFT_TEMPLATES = [
@@ -24,8 +30,7 @@ const GIFT_TEMPLATES = [
   {
     id: "free-sample",
     title: "Free sample with purchase",
-    description:
-      "E.g. Reward customers with a sample once they purchase at least 1 product.",
+    description: "E.g. Reward customers with a sample once they purchase at least 1 product.",
   },
   {
     id: "bogo",
@@ -98,8 +103,14 @@ export default function OffersIndexPage() {
                   onClick={() => navigate(`/app/offers/${offer.id}`)}
                 >
                   <s-table-cell>{offer.title}</s-table-cell>
-                  <s-table-cell>{offer.type}</s-table-cell>
-                  <s-table-cell>{offer.status}</s-table-cell>
+                  <s-table-cell>
+                    {offer.type.charAt(0) + offer.type.slice(1).toLowerCase()}
+                  </s-table-cell>
+                  <s-table-cell>
+                    <s-badge tone={statusTone(offer.effectiveStatus)}>
+                      {formatStatus(offer.effectiveStatus)}
+                    </s-badge>
+                  </s-table-cell>
                   <s-table-cell>
                     {new Date(offer.createdAt).toLocaleDateString()}
                   </s-table-cell>

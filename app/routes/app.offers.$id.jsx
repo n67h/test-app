@@ -1,4 +1,5 @@
 import { syncOffersMetafield } from "../lib/syncOffersMetafield";
+import { computeEffectiveStatus, formatStatus, statusTone } from "../lib/offerStatus";
 import { useState } from "react";
 import {
   useLoaderData,
@@ -69,15 +70,16 @@ export const action = async ({ request, params }) => {
     return redirect("/app/offers");
   }
 
-  if (intent === "activate" || intent === "pause") {
+  if (intent === "activate" || intent === "deactivate") {
     await prisma.offer.update({
       where: { id: params.id },
-      data: { status: intent === "activate" ? "ACTIVE" : "PAUSED" },
+      data: { status: intent === "activate" ? "ACTIVE" : "DEACTIVATED" },
     });
     await syncOffersMetafield(session.shop, admin);
     return redirect(`/app/offers/${params.id}`);
   }
 
+  // Full form save
   const title = formData.get("title");
   const internalName = formData.get("internalName");
   const startAt = formData.get("startAt") || null;
@@ -151,6 +153,7 @@ export default function EditGiftOfferPage() {
   const isSubmitting = navigation.state === "submitting";
 
   const config = JSON.parse(offer.config || "{}");
+  const effectiveStatus = computeEffectiveStatus(offer);
 
   const [appliesTo, setAppliesTo] = useState(
     config.cartCondition?.appliesTo || "ANY",
@@ -195,9 +198,9 @@ export default function EditGiftOfferPage() {
     >
       <s-badge
         slot="header-actions"
-        tone={offer.status === "ACTIVE" ? "success" : "neutral"}
+        tone={statusTone(effectiveStatus)}
       >
-        {offer.status}
+        {formatStatus(effectiveStatus)}
       </s-badge>
 
       <Form method="post">
@@ -239,19 +242,23 @@ export default function EditGiftOfferPage() {
 
       <s-section heading="Offer status">
         <s-stack direction="inline" gap="base">
-          {offer.status === "ACTIVE" ? (
+          {effectiveStatus === "ACTIVE" || effectiveStatus === "SCHEDULED" ? (
             <Form method="post">
-              <input type="hidden" name="intent" value="pause" />
-              <s-button type="submit">Pause offer</s-button>
+              <input type="hidden" name="intent" value="deactivate" />
+              <s-button type="submit">Deactivate offer</s-button>
             </Form>
-          ) : (
+          ) : effectiveStatus === "DEACTIVATED" || effectiveStatus === "DRAFT" ? (
             <Form method="post">
               <input type="hidden" name="intent" value="activate" />
               <s-button type="submit" variant="primary">
                 Activate offer
               </s-button>
             </Form>
-          )}
+          ) : effectiveStatus === "EXPIRED" ? (
+            <s-paragraph>
+              This offer has expired. Edit the end time to reactivate it.
+            </s-paragraph>
+          ) : null}
 
           <Form
             method="post"

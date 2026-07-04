@@ -1,19 +1,17 @@
 import prisma from "../db.server";
+import { computeEffectiveStatus } from "./offerStatus";
 
-/**
- * Syncs all ACTIVE offers for a shop into a shop-level metafield.
- * Called whenever an offer is activated, paused, deleted, or published.
- * Both the Cart Transform Function and Theme Extension read this metafield
- * to know what offers are currently active.
- */
 export async function syncOffersMetafield(shop, admin) {
-  // Fetch all active offers for this shop
-  const activeOffers = await prisma.offer.findMany({
-    where: { shop, status: "ACTIVE" },
+  const offers = await prisma.offer.findMany({
+    where: { shop, status: { in: ["ACTIVE", "SCHEDULED"] } },
     orderBy: { createdAt: "desc" },
   });
 
-  // Shape the data the Function and Theme Extension need
+  // Filter to only currently active offers using computed status
+  const activeOffers = offers.filter(
+    (offer) => computeEffectiveStatus(offer) === "ACTIVE"
+  );
+
   const offersPayload = activeOffers.map((offer) => {
     const config = JSON.parse(offer.config || "{}");
     return {
@@ -27,28 +25,18 @@ export async function syncOffersMetafield(shop, admin) {
     };
   });
 
-  // Get the real shop GID — needed as ownerId for shop-level metafields
-  const shopResponse = await admin.graphql(
-    `#graphql
-    query {
-      shop {
-        id
-      }
-    }`,
-  );
+  const shopResponse = await admin.graphql(`#graphql
+    query { shop { id } }
+  `);
   const shopData = await shopResponse.json();
   const shopId = shopData.data.shop.id;
 
-  // Write to shop metafield using $app namespace (app-exclusive ownership)
   const response = await admin.graphql(
     `#graphql
     mutation syncOffersMetafield($metafields: [MetafieldsSetInput!]!) {
       metafieldsSet(metafields: $metafields) {
         metafields {
           id
-          namespace
-          key
-          value
           updatedAt
         }
         userErrors {
@@ -76,13 +64,8 @@ export async function syncOffersMetafield(shop, admin) {
   const data = await response.json();
 
   if (data.data?.metafieldsSet?.userErrors?.length > 0) {
-    console.error(
-      "Metafield sync errors:",
-      data.data.metafieldsSet.userErrors,
-    );
-    throw new Error(
-      `Metafield sync failed: ${data.data.metafieldsSet.userErrors[0].message}`,
-    );
+    console.error("Metafield sync errors:", data.data.metafieldsSet.userErrors);
+    throw new Error(`Metafield sync failed: ${data.data.metafieldsSet.userErrors[0].message}`);
   }
 
   return data.data?.metafieldsSet?.metafields?.[0];
