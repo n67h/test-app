@@ -1,0 +1,88 @@
+{
+  "payload": {
+    "export": "cart-transform-run",
+    "target": "cart.transform.run",
+    "input": {
+      "cart": {
+        "lines": [
+          {
+            "id": "gid://shopify/CartLine/1",
+            "quantity": 1,
+            "attribute": null,
+            "cost": {
+              "subtotalAmount": {
+                "amount": "600.00",
+                "currencyCode": "USD"
+              }
+            },
+            "merchandise": {
+              "id": "gid://shopify/ProductVariant/1",
+              "product": {
+                "id": "gid://shopify/Product/1"
+              }
+            }
+          },
+          {
+            "id": "gid://shopify/CartLine/2",
+            "quantity": 1,
+            "attribute": {
+              "value": "true"
+            },
+            "cost": {
+              "subtotalAmount": {
+                "amount": "25.00",
+                "currencyCode": "USD"
+              }
+            },
+            "merchandise": {
+              "id": "gid://shopify/ProductVariant/99",
+              "product": {
+                "id": "gid://shopify/Product/99"
+              }
+            }
+          },
+          {
+            "id": "gid://shopify/CartLine/3",
+            "quantity": 1,
+            "attribute": {
+              "value": "true"
+            },
+            "cost": {
+              "subtotalAmount": {
+                "amount": "25.00",
+                "currencyCode": "USD"
+              }
+            },
+            "merchandise": {
+              "id": "gid://shopify/ProductVariant/98",
+              "product": {
+                "id": "gid://shopify/Product/99"
+              }
+            }
+          }
+        ]
+      },
+      "shop": {
+        "metafield": {
+          "value": "[{\"id\":\"offer1\",\"type\":\"GIFT\",\"triggerType\":\"CART_VALUE\",\"triggerValue\":500,\"cartCondition\":{\"min\":500,\"max\":null,\"appliesTo\":\"ANY\",\"productIds\":[]},\"gift\":{\"discountType\":\"PERCENTAGE\",\"discountValue\":100,\"receiveMode\":\"CHOOSE_COUNT\",\"receiveCount\":1,\"productIds\":[\"gid://shopify/Product/99\"]},\"schedule\":{\"startAt\":null,\"endAt\":null}}]"
+        }
+      }
+    },
+    "output": {
+      "operations": [
+        {
+          "lineUpdate": {
+            "cartLineId": "gid://shopify/CartLine/2",
+            "price": {
+              "adjustment": {
+                "fixedPricePerUnit": {
+                  "amount": "0.00"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
