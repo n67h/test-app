@@ -1,4 +1,26 @@
+import { useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
+
+// Helper: parse an ISO datetime string into { date: "YYYY-MM-DD", time: "HH:MM" }
+function parseDateTime(isoString) {
+  if (!isoString) return { date: "", time: "" };
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return { date: "", time: "" };
+    const date = d.toISOString().split("T")[0];
+    const time = d.toTimeString().slice(0, 5);
+    return { date, time };
+  } catch {
+    return { date: "", time: "" };
+  }
+}
+
+// Helper: combine date + time into ISO string, or null if date is empty
+function toISOString(date, time) {
+  if (!date) return "";
+  const timeStr = time || "00:00";
+  return `${date}T${timeStr}:00`;
+}
 
 export default function GiftOfferFormFields({
   defaultValues,
@@ -12,6 +34,15 @@ export default function GiftOfferFormFields({
   setGiftProducts,
 }) {
   const shopify = useAppBridge();
+
+  // Parse saved datetime values into separate date/time parts
+  const parsedStart = parseDateTime(defaultValues.startAt);
+  const parsedEnd = parseDateTime(defaultValues.endAt);
+
+  const [startDate, setStartDate] = useState(parsedStart.date);
+  const [startTime, setStartTime] = useState(parsedStart.time);
+  const [endDate, setEndDate] = useState(parsedEnd.date);
+  const [endTime, setEndTime] = useState(parsedEnd.time);
 
   const openConditionProductPicker = async () => {
     const result = await shopify.resourcePicker({
@@ -49,6 +80,7 @@ export default function GiftOfferFormFields({
 
   return (
     <>
+      {/* Hidden inputs for form submission */}
       <input
         type="hidden"
         name="conditionProductIds"
@@ -68,6 +100,17 @@ export default function GiftOfferFormFields({
         type="hidden"
         name="giftProductVariantIds"
         value={JSON.stringify(giftProducts.map((p) => p.variantId))}
+      />
+      {/* Combined datetime hidden inputs */}
+      <input
+        type="hidden"
+        name="startAt"
+        value={toISOString(startDate, startTime)}
+      />
+      <input
+        type="hidden"
+        name="endAt"
+        value={toISOString(endDate, endTime)}
       />
 
       <s-section heading="Offer information">
@@ -91,18 +134,39 @@ export default function GiftOfferFormFields({
           ></s-text-field>
 
           <s-stack direction="inline" gap="base">
-            <s-text-field
-              name="startAt"
-              label="Start time"
-              type="datetime-local"
-              value={defaultValues.startAt}
-            ></s-text-field>
-            <s-text-field
-              name="endAt"
-              label="End time"
-              type="datetime-local"
-              value={defaultValues.endAt}
-            ></s-text-field>
+            <s-stack direction="block" gap="tight">
+              <s-text>Start date</s-text>
+              <s-date-field
+                label="Start date"
+                value={startDate}
+                placeholder="YYYY-MM-DD"
+                onChange={(e) => setStartDate(e.target.value)}
+              ></s-date-field>
+              <s-text-field
+                label="Start time"
+                placeholder="14:00"
+                details="24-hour format (HH:MM)"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+              ></s-text-field>
+            </s-stack>
+
+            <s-stack direction="block" gap="tight">
+              <s-text>End date</s-text>
+              <s-date-field
+                label="End date"
+                value={endDate}
+                placeholder="YYYY-MM-DD"
+                onChange={(e) => setEndDate(e.target.value)}
+              ></s-date-field>
+              <s-text-field
+                label="End time"
+                placeholder="23:59"
+                details="24-hour format (HH:MM)"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+              ></s-text-field>
+            </s-stack>
           </s-stack>
         </s-stack>
       </s-section>
