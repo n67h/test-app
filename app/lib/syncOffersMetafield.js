@@ -20,6 +20,8 @@ export async function syncOffersMetafield(shop, admin) {
       triggerType: offer.triggerType,
       triggerValue: offer.triggerValue,
       cartCondition: config.cartCondition,
+      productCondition: config.productCondition,
+      multiplierCondition: config.multiplierCondition,
       gift: config.gift,
       schedule: config.schedule,
     };
