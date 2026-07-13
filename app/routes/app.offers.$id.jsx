@@ -12,6 +12,8 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import GiftOfferFormFields from "../components/GiftOfferFormFields";
+import BogoFormFields from "../components/BogoFormFields";
+import SpendMoreFormFields from "../components/SpendMoreFormFields";
 
 export const loader = async ({ request, params }) => {
   const { session, admin } = await authenticate.admin(request);
@@ -27,6 +29,8 @@ export const loader = async ({ request, params }) => {
   const config = JSON.parse(offer.config || "{}");
   const allProductIds = [
     ...(config.cartCondition?.productIds || []),
+    ...(config.productCondition?.productIds || []),
+    ...(config.multiplierCondition?.productIds || []),
     ...(config.gift?.productIds || []),
   ];
 
@@ -43,7 +47,7 @@ export const loader = async ({ request, params }) => {
           }
         }
       }`,
-      { variables: { ids: allProductIds } },
+      { variables: { ids: [...new Set(allProductIds)] } },
     );
     const data = await response.json();
     data.data.nodes.forEach((node) => {
@@ -79,65 +83,92 @@ export const action = async ({ request, params }) => {
     return redirect(`/app/offers/${params.id}`);
   }
 
-  // Full form save
+  const template = formData.get("template") || "spend-x-get-gift";
   const title = formData.get("title");
   const internalName = formData.get("internalName");
   const startAt = formData.get("startAt") || null;
   const endAt = formData.get("endAt") || null;
 
-  const cartMin = formData.get("cartMin")
-    ? parseFloat(formData.get("cartMin"))
-    : null;
-  const cartMax = formData.get("cartMax")
-    ? parseFloat(formData.get("cartMax"))
-    : null;
+  let config = {};
+  let triggerType = existing.triggerType;
+  let triggerValue = existing.triggerValue;
 
-  const appliesTo = formData.get("appliesTo");
-  const giftDiscountType = formData.get("giftDiscountType");
-  const giftDiscountValue = parseFloat(formData.get("giftDiscountValue") || "0");
-  const receiveMode = formData.get("receiveMode");
-  const receiveCount = formData.get("receiveCount")
-    ? parseInt(formData.get("receiveCount"), 10)
-    : null;
+  if (template === "spend-x-get-gift" || template === "custom") {
+    const cartMin = formData.get("cartMin") ? parseFloat(formData.get("cartMin")) : null;
+    const cartMax = formData.get("cartMax") ? parseFloat(formData.get("cartMax")) : null;
+    const appliesTo = formData.get("appliesTo");
+    const giftDiscountType = formData.get("giftDiscountType");
+    const giftDiscountValue = parseFloat(formData.get("giftDiscountValue") || "0");
+    const receiveMode = formData.get("receiveMode");
+    const receiveCount = formData.get("receiveCount") ? parseInt(formData.get("receiveCount"), 10) : null;
+    const conditionProductIds = JSON.parse(formData.get("conditionProductIds") || "[]");
+    const conditionProductVariantIds = JSON.parse(formData.get("conditionProductVariantIds") || "[]");
+    const giftProductIds = JSON.parse(formData.get("giftProductIds") || "[]");
+    const giftProductVariantIds = JSON.parse(formData.get("giftProductVariantIds") || "[]");
 
-  const conditionProductIds = JSON.parse(
-    formData.get("conditionProductIds") || "[]",
-  );
-  const conditionProductVariantIds = JSON.parse(
-    formData.get("conditionProductVariantIds") || "[]",
-  );
-  const giftProductIds = JSON.parse(formData.get("giftProductIds") || "[]");
-  const giftProductVariantIds = JSON.parse(
-    formData.get("giftProductVariantIds") || "[]",
-  );
+    triggerType = "CART_VALUE";
+    triggerValue = cartMin;
+    config = {
+      template,
+      customerTitle: title,
+      cartCondition: { min: cartMin, max: cartMax, appliesTo, productIds: conditionProductIds, variantIds: conditionProductVariantIds },
+      gift: { discountType: giftDiscountType, discountValue: giftDiscountValue, receiveMode, receiveCount, productIds: giftProductIds, variantIds: giftProductVariantIds },
+      schedule: { startAt, endAt },
+    };
 
-  const config = {
-    customerTitle: title,
-    cartCondition: {
-      min: cartMin,
-      max: cartMax,
-      appliesTo,
-      productIds: conditionProductIds,
-      variantIds: conditionProductVariantIds,
-    },
-    gift: {
-      discountType: giftDiscountType,
-      discountValue: giftDiscountValue,
-      receiveMode,
-      receiveCount,
-      productIds: giftProductIds,
-      variantIds: giftProductVariantIds,
-    },
-    schedule: { startAt, endAt },
-  };
+  } else if (template === "bogo" || template === "bxgy") {
+    const requiredQty = parseInt(formData.get("requiredQty") || "1", 10);
+    const multiplyGifts = formData.get("multiplyGifts") === "true";
+    const giftSameAsCondition = formData.get("giftSameAsCondition") === "true";
+    const trackBy = formData.get("trackBy") || "variant";
+    const appliesTo = formData.get("appliesTo");
+    const conditionProductIds = JSON.parse(formData.get("conditionProductIds") || "[]");
+    const conditionProductVariantIds = JSON.parse(formData.get("conditionProductVariantIds") || "[]");
+    const giftDiscountType = formData.get("giftDiscountType");
+    const giftDiscountValue = parseFloat(formData.get("giftDiscountValue") || "100");
+    const receiveMode = formData.get("receiveMode");
+    const receiveCount = formData.get("receiveCount") ? parseInt(formData.get("receiveCount"), 10) : null;
+    const giftProductIds = giftSameAsCondition ? conditionProductIds : JSON.parse(formData.get("giftProductIds") || "[]");
+    const giftProductVariantIds = giftSameAsCondition ? conditionProductVariantIds : JSON.parse(formData.get("giftProductVariantIds") || "[]");
+
+    triggerType = "PRODUCT_QUANTITY";
+    triggerValue = requiredQty;
+    config = {
+      template,
+      customerTitle: title,
+      productCondition: { requiredQty, multiplyGifts, giftSameAsCondition, trackBy, appliesTo, productIds: conditionProductIds, variantIds: conditionProductVariantIds },
+      gift: { discountType: giftDiscountType, discountValue: giftDiscountValue, receiveMode, receiveCount, productIds: giftProductIds, variantIds: giftProductVariantIds },
+      schedule: { startAt, endAt },
+    };
+
+  } else if (template === "spend-more-get-more") {
+    const baseValue = parseFloat(formData.get("baseValue") || "0");
+    const appliesTo = formData.get("appliesTo");
+    const conditionProductIds = JSON.parse(formData.get("conditionProductIds") || "[]");
+    const conditionProductVariantIds = JSON.parse(formData.get("conditionProductVariantIds") || "[]");
+    const giftDiscountType = formData.get("giftDiscountType");
+    const giftDiscountValue = parseFloat(formData.get("giftDiscountValue") || "100");
+    const giftProductIds = JSON.parse(formData.get("giftProductIds") || "[]");
+    const giftProductVariantIds = JSON.parse(formData.get("giftProductVariantIds") || "[]");
+
+    triggerType = "CART_VALUE_MULTIPLIER";
+    triggerValue = baseValue;
+    config = {
+      template,
+      customerTitle: title,
+      multiplierCondition: { baseValue, appliesTo, productIds: conditionProductIds, variantIds: conditionProductVariantIds },
+      gift: { discountType: giftDiscountType, discountValue: giftDiscountValue, productIds: giftProductIds, variantIds: giftProductVariantIds },
+      schedule: { startAt, endAt },
+    };
+  }
 
   await prisma.offer.update({
     where: { id: params.id },
     data: {
       title: internalName,
       status: intent === "publish" ? "ACTIVE" : existing.status,
-      triggerType: "CART_VALUE",
-      triggerValue: cartMin,
+      triggerType,
+      triggerValue,
       config: JSON.stringify(config),
     },
   });
@@ -153,30 +184,61 @@ export default function EditGiftOfferPage() {
   const isSubmitting = navigation.state === "submitting";
 
   const config = JSON.parse(offer.config || "{}");
+  const template = config.template || "spend-x-get-gift";
   const effectiveStatus = computeEffectiveStatus(offer);
 
+  const getProductIds = (type) => {
+    if (template === "bogo" || template === "bxgy") {
+      return type === "condition"
+        ? config.productCondition?.productIds || []
+        : config.gift?.productIds || [];
+    } else if (template === "spend-more-get-more") {
+      return type === "condition"
+        ? config.multiplierCondition?.productIds || []
+        : config.gift?.productIds || [];
+    }
+    return type === "condition"
+      ? config.cartCondition?.productIds || []
+      : config.gift?.productIds || [];
+  };
+
+  const getVariantIds = (type) => {
+    if (template === "bogo" || template === "bxgy") {
+      return type === "condition"
+        ? config.productCondition?.variantIds || []
+        : config.gift?.variantIds || [];
+    } else if (template === "spend-more-get-more") {
+      return type === "condition"
+        ? config.multiplierCondition?.variantIds || []
+        : config.gift?.variantIds || [];
+    }
+    return type === "condition"
+      ? config.cartCondition?.variantIds || []
+      : config.gift?.variantIds || [];
+  };
+
+  const savedConditionProducts = getProductIds("condition").map((id, i) => ({
+    id,
+    title: productTitles[id] || id.split("/").pop(),
+    variantId: getVariantIds("condition")[i] ?? null,
+  }));
+
+  const savedGiftProducts = getProductIds("gift").map((id, i) => ({
+    id,
+    title: productTitles[id] || id.split("/").pop(),
+    variantId: getVariantIds("gift")[i] ?? null,
+  }));
+
   const [appliesTo, setAppliesTo] = useState(
-    config.cartCondition?.appliesTo || "ANY",
+    config.cartCondition?.appliesTo ||
+    config.productCondition?.appliesTo ||
+    config.multiplierCondition?.appliesTo ||
+    "ANY",
   );
   const [receiveMode, setReceiveMode] = useState(
     config.gift?.receiveMode || "ALL",
   );
-
-  const savedConditionProducts = (config.cartCondition?.productIds || []).map(
-    (id, i) => ({
-      id,
-      title: productTitles[id] || id.split("/").pop(),
-      variantId: config.cartCondition?.variantIds?.[i] ?? null,
-    }),
-  );
-  const savedGiftProducts = (config.gift?.productIds || []).map((id, i) => ({
-    id,
-    title: productTitles[id] || id.split("/").pop(),
-    variantId: config.gift?.variantIds?.[i] ?? null,
-  }));
-
-  const [conditionProducts, setConditionProducts] =
-    useState(savedConditionProducts);
+  const [conditionProducts, setConditionProducts] = useState(savedConditionProducts);
   const [giftProducts, setGiftProducts] = useState(savedGiftProducts);
 
   const defaultValues = {
@@ -189,32 +251,68 @@ export default function EditGiftOfferPage() {
     giftDiscountType: config.gift?.discountType || "PERCENTAGE",
     giftDiscountValue: config.gift?.discountValue ?? "100",
     receiveCount: config.gift?.receiveCount ?? "1",
+    baseValue: String(config.multiplierCondition?.baseValue ?? ""),
+    requiredQty: String(config.productCondition?.requiredQty ?? "1"),
+    multiplyGifts: config.productCondition?.multiplyGifts ?? false,
+    giftSameAsCondition: config.productCondition?.giftSameAsCondition ?? (template === "bogo"),
+    trackBy: config.productCondition?.trackBy ?? "variant",
+    receiveMode: config.gift?.receiveMode ?? "ALL",
+  };
+
+  const getHeading = () => {
+    const headings = {
+      "spend-x-get-gift": "Edit Gift offer — Spend X amount",
+      "bogo": "Edit Gift offer — BOGO",
+      "bxgy": "Edit Gift offer — Buy X Get Y",
+      "spend-more-get-more": "Edit Gift offer — Spend more get more",
+      "custom": "Edit Gift offer",
+    };
+    return `${headings[template] || "Edit Gift offer"} — ${offer.title}`;
   };
 
   return (
-    <s-page
-      heading={`Edit Gift offer — ${offer.title}`}
-      backAction="/app/offers"
-    >
-      <s-badge
-        slot="header-actions"
-        tone={statusTone(effectiveStatus)}
-      >
+    <s-page heading={getHeading()} backAction="/app/offers">
+      <s-badge slot="header-actions" tone={statusTone(effectiveStatus)}>
         {formatStatus(effectiveStatus)}
       </s-badge>
 
       <Form method="post">
-        <GiftOfferFormFields
-          defaultValues={defaultValues}
-          appliesTo={appliesTo}
-          setAppliesTo={setAppliesTo}
-          receiveMode={receiveMode}
-          setReceiveMode={setReceiveMode}
-          conditionProducts={conditionProducts}
-          setConditionProducts={setConditionProducts}
-          giftProducts={giftProducts}
-          setGiftProducts={setGiftProducts}
-        />
+        <input type="hidden" name="template" value={template} />
+
+        {(template === "spend-x-get-gift" || template === "custom" || !template) && (
+          <GiftOfferFormFields
+            defaultValues={defaultValues}
+            appliesTo={appliesTo}
+            setAppliesTo={setAppliesTo}
+            receiveMode={receiveMode}
+            setReceiveMode={setReceiveMode}
+            conditionProducts={conditionProducts}
+            setConditionProducts={setConditionProducts}
+            giftProducts={giftProducts}
+            setGiftProducts={setGiftProducts}
+          />
+        )}
+
+        {(template === "bogo" || template === "bxgy") && (
+          <BogoFormFields
+            defaultValues={defaultValues}
+            isBogo={template === "bogo"}
+            conditionProducts={conditionProducts}
+            setConditionProducts={setConditionProducts}
+            giftProducts={giftProducts}
+            setGiftProducts={setGiftProducts}
+          />
+        )}
+
+        {template === "spend-more-get-more" && (
+          <SpendMoreFormFields
+            defaultValues={defaultValues}
+            appliesTo={appliesTo}
+            setAppliesTo={setAppliesTo}
+            giftProducts={giftProducts}
+            setGiftProducts={setGiftProducts}
+          />
+        )}
 
         <s-stack direction="inline" gap="base">
           <s-button
@@ -263,11 +361,7 @@ export default function EditGiftOfferPage() {
           <Form
             method="post"
             onSubmit={(e) => {
-              if (
-                !confirm(
-                  "Delete this offer permanently? This cannot be undone.",
-                )
-              ) {
+              if (!confirm("Delete this offer permanently? This cannot be undone.")) {
                 e.preventDefault();
               }
             }}
